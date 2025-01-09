@@ -3,20 +3,24 @@ import 'package:http/http.dart' as http;
 import 'package:weather_wise/Model/weather_model.dart';
 
 class WeatherServices {
-  fetchWeather() async {
+  static const String apiKey = '509079b22fae7e954dff8403ef5eba0e';  // Move to config
+  
+  Future<WeatherData> fetchWeatherByCity(String cityName) async {
     final response = await http.get(
       Uri.parse(
-          "https://api.openweathermap.org/data/2.5/weather?lat=30.272674&lon=77.993458&appid=509079b22fae7e954dff8403ef5eba0e"),
+        "https://api.openweathermap.org/data/2.5/weather?q=$cityName&appid=$apiKey"
+      ),
     );
+    
     try {
       if (response.statusCode == 200) {
         var json = jsonDecode(response.body);
         return WeatherData.fromJson(json);
       } else {
-        throw Exception('Failed to load Weather data');
+        throw Exception('City not found');
       }
     } catch (e) {
-      print(e.toString());
+      throw Exception('Failed to load weather data: ${e.toString()}');
     }
   }
 }

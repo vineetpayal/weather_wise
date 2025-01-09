@@ -13,15 +13,7 @@ class WeatherHome extends StatefulWidget {
 class _WeatherHomeState extends State<WeatherHome> {
   late WeatherData weatherInfo;
   bool isLoading = false;
-  myWeather() {
-    isLoading = false;
-    WeatherServices().fetchWeather().then((value) {
-      setState(() {
-        weatherInfo = value;
-        isLoading = true;
-      });
-    });
-  }
+  String? errorMessage;
 
   @override
   void initState() {
@@ -36,33 +28,149 @@ class _WeatherHomeState extends State<WeatherHome> {
       seaLevel: 0,
       weather: [],
     );
-    myWeather();
     super.initState();
+  }
+
+  Future<void> fetchWeatherForCity(String cityName) async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final weather = await WeatherServices().fetchWeatherByCity(cityName);
+      setState(() {
+        weatherInfo = weather;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Failed to load weather for $cityName';
+        isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    String formattedDate =
-        DateFormat('EEEE d, MMMM yyyy').format(DateTime.now());
+    String formattedDate = DateFormat('EEEE d, MMMM yyyy').format(DateTime.now());
     String formattedTime = DateFormat('hh:mm a').format(DateTime.now());
+
     return Scaffold(
       backgroundColor: const Color(0xFF676BD0),
-      body: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Center(
-              child: isLoading
-                  ? WeatherDetail(
-                      weather: weatherInfo,
-                      formattedDate: formattedDate,
-                      formattedTime: formattedTime,
-                    )
-                  : const CircularProgressIndicator(color: Colors.white,),
-            ),
-          ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              CitySearch(
+                onCitySelected: (cityName) {
+                  fetchWeatherForCity(cityName);
+                },
+              ),
+              if (errorMessage != null)
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(15),
+                child: Center(
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : WeatherDetail(
+                          weather: weatherInfo,
+                          formattedDate: formattedDate,
+                          formattedTime: formattedTime,
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class CitySearch extends StatefulWidget {
+  final Function(String) onCitySelected;
+
+  const CitySearch({
+    Key? key,
+    required this.onCitySelected,
+  }) : super(key: key);
+
+  @override
+  State<CitySearch> createState() => _CitySearchState();
+}
+
+class _CitySearchState extends State<CitySearch> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchController,
+            style: const TextStyle(color: Colors.white),
+            textInputAction: TextInputAction.search,
+            keyboardType: TextInputType.text,
+            decoration: InputDecoration(
+              hintText: 'Enter city name',
+              hintStyle: const TextStyle(color: Colors.white70),
+              prefixIcon: const Icon(Icons.search, color: Colors.white),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.clear, color: Colors.white),
+                onPressed: () => _searchController.clear(),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.white),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.white, width: 2),
+              ),
+            ),
+            onSubmitted: (value) {
+              final trimmedValue = value.trim();
+              if (trimmedValue.isNotEmpty) {
+                widget.onCitySelected(trimmedValue);
+                FocusScope.of(context).unfocus(); // Hide keyboard after search
+              }
+            },
+          ),
+        ],
       ),
     );
   }
@@ -72,6 +180,7 @@ class WeatherDetail extends StatelessWidget {
   final WeatherData weather;
   final String formattedDate;
   final String formattedTime;
+
   const WeatherDetail({
     super.key,
     required this.weather,
@@ -83,7 +192,6 @@ class WeatherDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // for current address name
         Text(
           weather.name,
           style: const TextStyle(
@@ -92,7 +200,6 @@ class WeatherDetail extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        // for current temperature of my location
         Text(
           "${weather.temperature.current.toStringAsFixed(0)}°C",
           style: const TextStyle(
@@ -101,7 +208,6 @@ class WeatherDetail extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        // fpr weather condition
         if (weather.weather.isNotEmpty)
           Text(
             weather.weather[0].main,
@@ -112,7 +218,6 @@ class WeatherDetail extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 30),
-        // for current date and time
         Text(
           formattedDate,
           style: const TextStyle(
@@ -140,7 +245,6 @@ class WeatherDetail extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 30),
-        // for more weather detail
         Container(
           height: 250,
           decoration: BoxDecoration(
@@ -164,7 +268,9 @@ class WeatherDetail extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         weatherInfoCard(
-                            title: "Wind", value: "${weather.wind.speed}km/h"),
+                          title: "Wind",
+                          value: "${weather.wind.speed}km/h",
+                        ),
                       ],
                     ),
                     Column(
@@ -176,9 +282,9 @@ class WeatherDetail extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         weatherInfoCard(
-                            title: "Max",
-                            value:
-                                "${weather.maxTemperature.toStringAsFixed(2)}°C"),
+                          title: "Max",
+                          value: "${weather.maxTemperature.toStringAsFixed(2)}°C",
+                        ),
                       ],
                     ),
                     Column(
@@ -190,9 +296,9 @@ class WeatherDetail extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         weatherInfoCard(
-                            title: "Min",
-                            value:
-                                "${weather.minTemperature.toStringAsFixed(2)}°C"),
+                          title: "Min",
+                          value: "${weather.minTemperature.toStringAsFixed(2)}°C",
+                        ),
                       ],
                     ),
                   ],
@@ -210,7 +316,9 @@ class WeatherDetail extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         weatherInfoCard(
-                            title: "Humidity", value: "${weather.humidity}%"),
+                          title: "Humidity",
+                          value: "${weather.humidity}%",
+                        ),
                       ],
                     ),
                     Column(
@@ -222,7 +330,9 @@ class WeatherDetail extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         weatherInfoCard(
-                            title: "Pressure", value: "${weather.pressure}hPa"),
+                          title: "Pressure",
+                          value: "${weather.pressure}hPa",
+                        ),
                       ],
                     ),
                     Column(
@@ -234,11 +344,13 @@ class WeatherDetail extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         weatherInfoCard(
-                            title: "Sea-Level", value: "${weather.seaLevel}m"),
+                          title: "Sea-Level",
+                          value: "${weather.seaLevel}m",
+                        ),
                       ],
                     ),
                   ],
-                )
+                ),
               ],
             ),
           ),
@@ -265,7 +377,7 @@ class WeatherDetail extends StatelessWidget {
             fontWeight: FontWeight.w500,
             fontSize: 16,
           ),
-        )
+        ),
       ],
     );
   }
